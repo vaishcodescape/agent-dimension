@@ -1,2 +1,2 @@
 # agent-sandbox
-An agentic sandbox env for experimenting with AI agents.
+An agentic sandbox environment for experimenting with AI agents.
