@@ -1,0 +1,5 @@
+# Multi-agent sandbox — pinned to versions verified on Python 3.14
+deepagents==0.6.12
+langchain-anthropic==1.4.8
+anthropic==0.112.0
+python-dotenv==1.0.1
