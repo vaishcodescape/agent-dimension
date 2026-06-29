@@ -23,15 +23,17 @@ tool use is not limited to a virtual in-memory filesystem.
 
 ---
 
+## Architecture
 
+![agent-dimension architecture](.github/architecture.png)
+
+---
 
 ## How agents interact
 
 Everything happens in one **shared environment** (in-memory locally, `/workspace`
 in Docker). Agents do not pass private messages — they coordinate by **reading
 and writing the same files** and by **delegating through the orchestrator**.
-
-agent-dimension architecture
 
 ### Three modes of agent-to-agent conversation
 
