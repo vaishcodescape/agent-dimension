@@ -1,10 +1,10 @@
-#Spawning Subagents in the Sandbox Environments
+# Spawning subagents in the sandbox environment.
 
 from __future__ import annotations
 
 from deepagents import SubAgent
 
-from agents.model import DEFAULT_MODEL
+from agents.model import build_model_for_role
 from agents.tools import EXAMPLE_TOOLS
 
 # A "planner" that breaks a task down and writes a plan to the shared filesystem.
@@ -19,6 +19,7 @@ PLANNER = SubAgent(
         "concrete steps. Write the plan to `plan.md` using the file tools, then "
         "summarize it in your reply. Do not try to execute the steps yourself."
     ),
+    model=build_model_for_role("planner"),
 )
 
 # A "worker" that does the actual work, using the example tools.
@@ -26,18 +27,19 @@ WORKER = SubAgent(
     name="worker",
     description=(
         "Executes a single, well-specified step. Delegate one concrete unit of "
-        "work at a time. Can read/write workspace files and use example tools."
+        "work at a time. Can read/write workspace files, run shell commands via "
+        "execute, and use example tools."
     ),
     system_prompt=(
         "You are the Worker. You are given one concrete step. Do exactly that "
         "step — no more. Read any inputs you need from the workspace with the "
-        "file tools, do the work, and write your output to a clearly named file. "
+        "file tools, run shell commands with execute when needed (git, curl, "
+        "python, pip, make, etc.), and write your output to a clearly named file. "
         "Report what you produced and where you saved it."
     ),
     tools=EXAMPLE_TOOLS,
-    # Subagents can run a cheaper/faster model than the orchestrator. Swap to
-    # e.g. "claude-sonnet-4-6" or "claude-haiku-4-5" to cut cost on grunt work.
-    model=DEFAULT_MODEL,
+    # Override via WORKER_LLM_MODEL (e.g. openai:gpt-4.1-mini for cheaper grunt work).
+    model=build_model_for_role("worker"),
 )
 
 # A "critic" that reviews work and pushes back.
@@ -52,6 +54,7 @@ CRITIC = SubAgent(
         "task. Identify concrete problems, gaps, or errors. Be specific and "
         "actionable. If the work is solid, say so plainly — don't invent issues."
     ),
+    model=build_model_for_role("critic"),
 )
 
 # The task-execution team: decompose → do → review.

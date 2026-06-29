@@ -1,14 +1,13 @@
-"""Direct agent-to-agent roundtable: personas converse turn by turn.
-
-Where the orchestrator panel (agents/discussants.py + the `task` tool) routes
-every turn through a coordinator, this module is a plain Python loop that calls
-each persona directly. There is no orchestrator in the middle — the agents talk
-to each other through a transcript this loop maintains, and you watch each turn
-stream in live.
-
-The conversation is autonomous: you set the topic, and the panel debates it for
-a few rounds — each agent reads everything said so far and replies to it.
-"""
+# Direct agent-to-agent roundtable: personas converse turn by turn.
+#
+# Where the orchestrator panel (agents/discussants.py + the `task` tool) routes
+# every turn through a coordinator, this module is a plain Python loop that calls
+# each persona directly. There is no orchestrator in the middle — the agents talk
+# to each other through a transcript this loop maintains, and you watch each turn
+# stream in live.
+#
+# The conversation is autonomous: you set the topic, and the panel debates it for
+# a few rounds — each agent reads everything said so far and replies to it.
 
 from __future__ import annotations
 
@@ -17,8 +16,8 @@ from typing import Iterable
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from agents.discussants import PERSONA_STANCES
-from agents.model import build_model
+from agents.discussants import PERSONA_STANCES, persona_model_spec
+from agents.model import build_model, collect_credentials_errors
 
 # Default speaking order for a round. Any key in PERSONA_STANCES works.
 DEFAULT_PANEL = ["optimist", "skeptic", "pragmatist"]
@@ -35,28 +34,27 @@ _ROUNDTABLE_RULES = (
 
 @dataclass
 class Turn:
-    """One contribution to the roundtable."""
-
+    # One contribution to the roundtable.
     speaker: str
     text: str
 
 
 @dataclass
 class Roundtable:
-    """A direct, turn-by-turn debate among persona agents.
-
-    Args:
-        topic: The question the panel debates.
-        panel: Persona names (keys of PERSONA_STANCES) in speaking order.
-        rounds: How many times each persona speaks.
-        model_kwargs: Forwarded to build_model (e.g. model=, thinking=).
-    """
+    # A direct, turn-by-turn debate among persona agents.
+    #
+    # Args:
+    #     topic: The question the panel debates.
+    #     panel: Persona names (keys of PERSONA_STANCES) in speaking order.
+    #     rounds: How many times each persona speaks.
+    #     model_kwargs: Forwarded to build_model (e.g. model=, thinking=).
 
     topic: str
     panel: list[str] = field(default_factory=lambda: list(DEFAULT_PANEL))
     rounds: int = 2
     model_kwargs: dict = field(default_factory=dict)
     transcript: list[Turn] = field(default_factory=list, init=False)
+    _models: dict[str, object] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
         unknown = [p for p in self.panel if p not in PERSONA_STANCES]
@@ -65,18 +63,22 @@ class Roundtable:
                 f"Unknown persona(s): {', '.join(unknown)}. "
                 f"Available: {', '.join(PERSONA_STANCES)}"
             )
-        # Thinking off keeps turns snappy and the streamed output clean (no
-        # interleaved reasoning blocks). Callers can override via model_kwargs.
-        self.model_kwargs.setdefault("thinking", False)
-        self._model = build_model(**self.model_kwargs)
+
+    def _model_for(self, speaker: str):
+        if speaker not in self._models:
+            spec = persona_model_spec(speaker)
+            kwargs = dict(self.model_kwargs)
+            kwargs.setdefault("model", spec)
+            self._models[speaker] = build_model(**kwargs)
+        return self._models[speaker]
 
     def speakers(self) -> Iterable[str]:
-        """Yield the speaker order for the whole session."""
+        # Yield the speaker order for the whole session.
         for _ in range(self.rounds):
             yield from self.panel
 
     def turn(self, speaker: str) -> Turn:
-        """Run one speaker's turn and append it to the transcript."""
+        # Run one speaker's turn and append it to the transcript.
         chunks = list(self._stream_turn(speaker))
         text = "".join(chunks).strip()
         turn = Turn(speaker, text)
@@ -84,11 +86,10 @@ class Roundtable:
         return turn
 
     def stream_turn(self, speaker: str):
-        """Stream one speaker's turn token-by-token, then record it.
-
-        Yields text deltas as they arrive; appends the finished Turn to the
-        transcript once the stream completes.
-        """
+        # Stream one speaker's turn token-by-token, then record it.
+        #
+        # Yields text deltas as they arrive; appends the finished Turn to the
+        # transcript once the stream completes.
         buf: list[str] = []
         for delta in self._stream_turn(speaker):
             buf.append(delta)
@@ -99,7 +100,7 @@ class Roundtable:
 
     def _stream_turn(self, speaker: str):
         system, human = self._prompt_for(speaker)
-        for chunk in self._model.stream([system, human]):
+        for chunk in self._model_for(speaker).stream([system, human]):
             yield _text(chunk.content)
 
     def _prompt_for(self, speaker: str) -> tuple[SystemMessage, HumanMessage]:
@@ -119,7 +120,7 @@ class Roundtable:
 
 
 def _text(content) -> str:
-    """Extract plain text from a message/chunk content (str or block list)."""
+    # Extract plain text from a message/chunk content (str or block list).
     if isinstance(content, str):
         return content
     if isinstance(content, list):

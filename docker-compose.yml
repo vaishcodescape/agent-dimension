@@ -1,0 +1,28 @@
+services:
+  chat:
+    build: .
+    stdin_open: true
+    tty: true
+    env_file: .env
+    volumes:
+      - agent-workspace:/workspace
+    command: ["chat.py"]
+
+  run:
+    build: .
+    env_file: .env
+    volumes:
+      - agent-workspace:/workspace
+    command: ["run.py"]
+
+  discuss:
+    build: .
+    stdin_open: true
+    tty: true
+    env_file: .env
+    volumes:
+      - agent-workspace:/workspace
+    command: ["discuss.py"]
+
+volumes:
+  agent-workspace:

@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
-"""Watch the AI agents debate a topic, turn by turn.
-
-You give a topic; the panel talks it through directly — each agent reads what
-the others have said and responds to it. There's no orchestrator in the middle:
-you set the topic and watch the agents talk to each other.
-
-Usage:
-    python discuss.py
-    python discuss.py "Should we ship the beta this week?"
-    python discuss.py --rounds 3 "Monorepo or polyrepo?"
-    python discuss.py --panel optimist,skeptic "Is the deadline realistic?"
-
-Options:
-    --rounds N        how many times each agent speaks (default 2)
-    --panel a,b,c     persona speaking order (default optimist,skeptic,pragmatist)
-"""
+# Watch the AI agents debate a topic, turn by turn.
+#
+# You give a topic; the panel talks it through directly — each agent reads what
+# the others have said and responds to it. There's no orchestrator in the middle:
+# you set the topic and watch the agents talk to each other.
+#
+# Usage:
+#     python discuss.py
+#     python discuss.py "Should we ship the beta this week?"
+#     python discuss.py --rounds 3 "Monorepo or polyrepo?"
+#     python discuss.py --panel optimist,skeptic "Is the deadline realistic?"
+#
+# Options:
+#     --rounds N        how many times each agent speaks (default 2)
+#     --panel a,b,c     persona speaking order (default optimist,skeptic,pragmatist)
 
 from __future__ import annotations
 
@@ -27,7 +26,8 @@ from dotenv import load_dotenv
 # Load ANTHROPIC_API_KEY (and optional CLAUDE_MODEL) before the client loads.
 load_dotenv()
 
-from agents.discussants import PERSONA_STANCES
+from agents.discussants import PERSONA_STANCES, persona_model_spec
+from agents.model import collect_credentials_errors
 from agents.roundtable import DEFAULT_PANEL, Roundtable
 
 # Distinct colors per speaker so turns are easy to tell apart in the terminal.
@@ -71,15 +71,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     args = _parse_args(argv)
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print(
-            "ANTHROPIC_API_KEY is not set.\n"
-            "Copy .env.example to .env and add your key:\n"
-            "    cp .env.example .env",
-            file=sys.stderr,
-        )
-        return 1
-
     panel = [p.strip() for p in args.panel.split(",") if p.strip()]
     unknown = [p for p in panel if p not in PERSONA_STANCES]
     if unknown:
@@ -88,6 +79,10 @@ def main(argv: list[str]) -> int:
             f"Available: {', '.join(PERSONA_STANCES)}",
             file=sys.stderr,
         )
+        return 1
+
+    if err := collect_credentials_errors(*(persona_model_spec(p) for p in panel)):
+        print(err, file=sys.stderr)
         return 1
 
     topic = " ".join(args.topic).strip()

@@ -1,16 +1,16 @@
-"""The orchestrator: the top-level agent that delegates to subagents.
-
-deepagents gives the orchestrator a built-in `task` tool for spawning the
-subagents defined in agents/subagents.py, plus a shared virtual filesystem and
-a todo planner. The orchestrator's job is to decompose the request, delegate to
-the right specialist, and assemble the result.
-"""
+# The orchestrator: the top-level agent that delegates to subagents.
+#
+# deepagents gives the orchestrator a built-in `task` tool for spawning the
+# subagents defined in agents/subagents.py, plus a shared virtual filesystem and
+# a todo planner. The orchestrator's job is to decompose the request, delegate to
+# the right specialist, and assemble the result.
 
 from __future__ import annotations
 
 from deepagents import create_deep_agent
 
 from agents.model import build_model
+from agents.sandbox import build_backend, sandbox_prompt_suffix
 from agents.subagents import SUBAGENTS
 
 ORCHESTRATOR_PROMPT = """\
@@ -49,22 +49,13 @@ Keep your own messages short. When you finish, give a brief summary of what was 
 produced or concluded and where it lives in the workspace.
 """
 
+# Build the orchestrator deep agent with its subagent team.
 
 def build_orchestrator(*, checkpointer=None, **model_kwargs):
-    """Build the orchestrator deep agent with its subagent team.
-
-    Args:
-        checkpointer: Optional LangGraph checkpointer. Pass one (e.g.
-            InMemorySaver) to make the agent remember the conversation across
-            turns — required for interactive chat. Then invoke with a
-            config={"configurable": {"thread_id": ...}}.
-        **model_kwargs: Forwarded to build_model() (e.g. model=, max_tokens=).
-
-    Returns a compiled LangGraph agent; invoke it with .invoke()/.stream().
-    """
     return create_deep_agent(
         model=build_model(**model_kwargs),
         subagents=SUBAGENTS,
-        system_prompt=ORCHESTRATOR_PROMPT,
+        system_prompt=ORCHESTRATOR_PROMPT + sandbox_prompt_suffix(),
+        backend=build_backend(),
         checkpointer=checkpointer,
     )

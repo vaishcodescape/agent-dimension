@@ -1,14 +1,13 @@
-"""Shared rendering helpers for the CLI front-ends (run.py, chat.py).
-
-Turns LangChain message objects into readable transcript lines so both the
-one-shot task runner and the interactive chat show agent activity the same way.
-"""
+# Shared rendering helpers for the CLI front-ends (run.py, chat.py).
+#
+# Turns LangChain message objects into readable transcript lines so both the
+# one-shot task runner and the interactive chat show agent activity the same way.
 
 from __future__ import annotations
 
 
 def format_message(msg) -> str | None:
-    """Render one LangChain message as a readable line, or None to skip it."""
+    # Render one LangChain message as a readable line, or None to skip it.
     role = getattr(msg, "type", "?")  # 'human' | 'ai' | 'tool'
     text = ""
     content = getattr(msg, "content", "")
@@ -37,6 +36,6 @@ def format_message(msg) -> str | None:
 
 
 def short(args: dict, limit: int = 120) -> str:
-    """Compactly render tool-call args, truncating long values."""
+    # Compactly render tool-call args, truncating long values.
     s = ", ".join(f"{k}={v!r}" for k, v in args.items())
     return s if len(s) <= limit else s[:limit] + "…"

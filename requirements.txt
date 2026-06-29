@@ -1,5 +1,13 @@
 # Multi-agent sandbox — pinned to versions verified on Python 3.14
 deepagents==0.6.12
-langchain-anthropic==1.4.8
-anthropic==0.112.0
 python-dotenv==1.0.1
+
+# Supported LLM providers (install only what you use, or keep all for mixing)
+langchain-openai>=0.3.0
+langchain-anthropic==1.4.8
+langchain-google-genai>=4.2.0
+langchain-ollama>=0.3.0
+langchain-deepseek>=1.0.0
+langchain-xai>=1.0.0
+langchain-groq>=1.0.0
+langchain-mistralai>=0.2.0

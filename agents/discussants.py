@@ -1,22 +1,22 @@
-"""Discussion-panel subagents — personas that hold and defend opinions.
-
-Where the planner/worker/critic team (agents/subagents.py) *executes* a task,
-this panel *deliberates* on one. The orchestrator convenes them as a roundtable:
-each persona reads the shared discussion thread, adds its own take, and responds
-to the others. They genuinely disagree — that friction is the point.
-
-Hand-off happens through one shared file, `discussion.md`, so the agents are
-literally talking to each other through the workspace.
-
-Rename these personas or add your own; any SubAgent listed in DISCUSSANTS becomes
-available to the orchestrator automatically.
-"""
+# Discussion-panel subagents — personas that hold and defend opinions.
+#
+# Where the planner/worker/critic team (agents/subagents.py) *executes* a task,
+# this panel *deliberates* on one. The orchestrator convenes them as a roundtable:
+# each persona reads the shared discussion thread, adds its own take, and responds
+# to the others. They genuinely disagree — that friction is the point.
+#
+# Hand-off happens through one shared file, `discussion.md`, so the agents are
+# literally talking to each other through the workspace.
+#
+# Rename these personas or add your own; any SubAgent listed in DISCUSSANTS becomes
+# available to the orchestrator automatically. Give each persona its own LLM via
+# OPTIMIST_LLM_MODEL, SKEPTIC_LLM_MODEL, etc.
 
 from __future__ import annotations
 
 from deepagents import SubAgent
 
-from agents.model import DEFAULT_MODEL
+from agents.model import build_model_for_role, model_spec_for
 
 # Shared opening every discussant gets, so they all play by the same rules.
 _PANEL_RULES = (
@@ -54,6 +54,11 @@ PERSONA_STANCES = {
 }
 
 
+def persona_model_spec(name: str) -> str:
+    # Model spec for a roundtable persona (used by discuss.py direct loop).
+    return model_spec_for(name)
+
+
 def _persona(name: str, stance: str) -> SubAgent:
     return SubAgent(
         name=name,
@@ -63,7 +68,7 @@ def _persona(name: str, stance: str) -> SubAgent:
             "discussion.md."
         ),
         system_prompt=_PANEL_RULES.format(name=name.capitalize()) + f"\n\nYour persona: {stance}",
-        model=DEFAULT_MODEL,
+        model=build_model_for_role(name),
     )
 
 

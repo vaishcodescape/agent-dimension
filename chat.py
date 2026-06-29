@@ -1,5 +1,42 @@
 #!/usr/bin/env python3
-"""Interactive chat with the multi-agent sandbox.
+# Interactive chat with the multi-agent sandbox.
+#
+# Unlike run.py (one task, then exit), this opens an ongoing conversation. The
+# orchestrator remembers the whole session — earlier turns, the files the team
+# wrote — so you can follow up, refine, and ask the panel to debate things.
+#
+# Usage:
+#     python chat.py
+#
+# Type a message and press enter. The orchestrator answers directly for simple
+# turns, convenes the planner/worker/critic team for real tasks, or convenes the
+# discussion panel (optimist / skeptic / pragmatist) when you ask the agents to
+# weigh in on something.
+#
+# Commands:
+#     /files   show the shared workspace files
+#     /reset   start a fresh conversation (clears memory + workspace)
+#     /help    show these commands
+#     /quit    exit (also: /exit, Ctrl-D)
+
+from __future__ import annotations
+
+import sys
+import uuid
+
+from dotenv import load_dotenv
+
+# Load ANTHROPIC_API_KEY (and optional CLAUDE_MODEL) before the client loads.
+load_dotenv()
+
+from langgraph.checkpoint.memory import InMemorySaver
+
+from agents import build_orchestrator, collect_credentials_errors, default_model_spec
+from agents.render import format_message
+from agents.sandbox import list_workspace_files, sandbox_enabled
+
+HELP = """\
+Interactive chat with the multi-agent sandbox.
 
 Unlike run.py (one task, then exit), this opens an ongoing conversation. The
 orchestrator remembers the whole session — earlier turns, the files the team
@@ -20,23 +57,6 @@ Commands:
     /quit    exit (also: /exit, Ctrl-D)
 """
 
-from __future__ import annotations
-
-import sys
-import uuid
-
-from dotenv import load_dotenv
-
-# Load ANTHROPIC_API_KEY (and optional CLAUDE_MODEL) before the client loads.
-load_dotenv()
-
-import os
-
-from langgraph.checkpoint.memory import InMemorySaver
-
-from agents import build_orchestrator
-from agents.render import format_message
-
 BANNER = """\
 === agent-sandbox chat ===
 Chatting with the orchestrator + its team. It can do tasks (planner/worker/
@@ -46,7 +66,7 @@ Type /help for commands, /quit to exit.
 
 
 def _print_new_messages(state: dict, seen: int) -> int:
-    """Print messages we haven't shown yet; return the new running count."""
+    # Print messages we haven't shown yet; return the new running count.
     messages = state.get("messages", [])
     for msg in messages[seen:]:
         line = format_message(msg)
@@ -56,6 +76,16 @@ def _print_new_messages(state: dict, seen: int) -> int:
 
 
 def _show_files(agent, config) -> None:
+    if sandbox_enabled():
+        files = list_workspace_files()
+        if not files:
+            print("  (workspace is empty)")
+            return
+        print("\n=== WORKSPACE FILES ===")
+        for name, content in files.items():
+            print(f"\n--- {name} ---\n{content}")
+        return
+
     state = agent.get_state(config)
     files = (state.values or {}).get("files", {}) or {}
     if not files:
@@ -68,13 +98,8 @@ def _show_files(agent, config) -> None:
 
 
 def main() -> int:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print(
-            "ANTHROPIC_API_KEY is not set.\n"
-            "Copy .env.example to .env and add your key:\n"
-            "    cp .env.example .env",
-            file=sys.stderr,
-        )
+    if err := collect_credentials_errors(default_model_spec()):
+        print(err, file=sys.stderr)
         return 1
 
     # The checkpointer is what gives the conversation memory: each turn is
@@ -99,7 +124,7 @@ def main() -> int:
             print("bye.")
             return 0
         if user == "/help":
-            print(__doc__)
+            print(HELP)
             continue
         if user == "/files":
             _show_files(agent, config)
@@ -122,7 +147,6 @@ def main() -> int:
                 # On the first chunk the state echoes the full history; skip
                 # straight to the tail so we don't reprint past turns.
                 if seen == 0:
-                    
                     seen = max(0, len(state.get("messages", [])) - 1)
                 seen = _print_new_messages(state, seen)
         except KeyboardInterrupt:

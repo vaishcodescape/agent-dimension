@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Run the multi-agent sandbox on a task.
-
-Usage:
-    python run.py "your task here"
-    python run.py                      # runs a built-in demo task
-
-Streams what each agent does (messages, tool calls, delegations) and prints the
-shared workspace files at the end.
-"""
+# Run the multi-agent sandbox on a task.
+#
+# Usage:
+#     python run.py "your task here"
+#     python run.py                      # runs a built-in demo task
+#
+# Streams what each agent does (messages, tool calls, delegations) and prints the
+# shared workspace files at the end.
 
 from __future__ import annotations
 
@@ -19,10 +18,9 @@ from dotenv import load_dotenv
 # touches the Anthropic client.
 load_dotenv()
 
-import os
-
-from agents import build_orchestrator
+from agents import build_orchestrator, collect_credentials_errors, default_model_spec
 from agents.render import format_message
+from agents.sandbox import list_workspace_files, sandbox_enabled
 
 DEMO_TASK = (
     "Draft a one-paragraph project pitch for a multi-agent coding assistant, "
@@ -31,13 +29,8 @@ DEMO_TASK = (
 
 
 def main() -> int:
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print(
-            "ANTHROPIC_API_KEY is not set.\n"
-            "Copy .env.example to .env and add your key:\n"
-            "    cp .env.example .env",
-            file=sys.stderr,
-        )
+    if err := collect_credentials_errors(default_model_spec()):
+        print(err, file=sys.stderr)
         return 1
 
     task = " ".join(sys.argv[1:]).strip() or DEMO_TASK
@@ -62,8 +55,10 @@ def main() -> int:
                 print(line)
         seen = len(messages)
 
-    # Show the shared virtual filesystem the agents wrote to.
+    # Show workspace output (virtual state or disk-backed sandbox).
     files = (final_state or {}).get("files", {}) or {}
+    if sandbox_enabled():
+        files = list_workspace_files() or files
     if files:
         print("\n=== WORKSPACE FILES ===")
         for name, content in files.items():
