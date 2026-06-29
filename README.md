@@ -1,57 +1,57 @@
 # agent-dimension
 
-A multi-agent sandbox where specialized LLM agents coordinate, debate, and run
-real work — built on [**deepagents**](https://pypi.org/project/deepagents/) and
-[**LangChain**](https://python.langchain.com/) chat models.
+**A shared environment where AI agents can interact with eachother, and use tools together.**
 
-Use it to experiment with orchestrator-led task teams, discussion panels, direct
-agent-to-agent roundtables, and (in Docker) a Linux environment with shell access.
+agent-dimension is a multi-agent sandbox built on
+**[deepagents](https://pypi.org/project/deepagents/)** and
+**[LangChain](https://python.langchain.com/)**. You chat with an orchestrator;
+it delegates to specialist agents that **coordinate through a common workspace** reading each other's files, replying to each other's arguments, and calling tools (shell commands, custom functions, filesystem ops) to get work done as a team.
 
-## What you get
+This is not a single chatbot. It is a **room full of agents** that can:
 
-- **Orchestrator + subagents** — a top-level agent delegates to a planner,
-  worker, critic, and a three-person discussion panel via deepagents' `task` tool.
-- **Multiple LLM providers** — mix OpenAI, Anthropic, Gemini, Groq, xAI (Grok),
-  DeepSeek, Mistral, and Ollama across agents in one run.
-- **Three front-ends** — interactive chat, one-shot task runner, and a live
-  roundtable debate CLI.
-- **Docker sandbox** — agents get a persistent `/workspace`, real filesystem I/O,
-  and the `execute` tool for shell commands (`git`, `curl`, `python`, `make`, …).
+- **Talk to you** — the orchestrator is your conversational partner; you steer,
+follow up, and ask for debate or execution.
+- **Talk to each other** — subagents respond to prior turns, push back by name,
+and build on shared artifacts (`plan.md`, `discussion.md`, …).
+- **Use tools on shared state** — one agent writes a plan, another runs shell
+commands against it, a third reviews the output; all through the same workspace.
+- **Run on different models** — each agent can use a different provider (OpenAI,
+Anthropic, Gemini, Groq, Grok, DeepSeek, Mistral, Ollama).
 
-## Architecture
+In Docker, agents also get a real Linux sandbox (`execute`, `git`, `curl`, …) so
+tool use is not limited to a virtual in-memory filesystem.
 
-```
-                         ┌─────────────────────────────────┐
-                         │         orchestrator            │
-                         │  (LLM_MODEL — your default)     │
-                         └───────────────┬─────────────────┘
-                                         │ task tool
-           ┌─────────────────────────────┼─────────────────────────────┐
-           │                             │                             │
-     task team                     discussion panel              built-in tools
-  ┌────────┴────────┐          ┌─────────┴─────────┐         ls, read/write,
-  │ planner         │          │ optimist          │         edit, glob, grep,
-  │ worker (+tools) │          │ skeptic           │         execute*, todos
-  │ critic          │          │ pragmatist        │
-  └─────────────────┘          └───────────────────┘
-           │                             │
-           └────────── workspace ────────┘
-                 plan.md, discussion.md, …
+---
 
-* execute is available when AGENT_SANDBOX is enabled (Docker by default).
-```
 
-**Task flow:** orchestrator → planner (writes `plan.md`) → worker (executes steps)
-→ critic (reviews) → orchestrator summarizes.
 
-**Discussion flow:** orchestrator convenes optimist / skeptic / pragmatist; each
-appends to `discussion.md` and responds to the others; orchestrator reports the
-bottom line.
+## How agents interact
 
-**Roundtable** (`discuss.py`) skips the orchestrator — personas debate turn-by-turn
-in a plain Python loop with live streaming.
+Everything happens in one **shared environment** (in-memory locally, `/workspace`
+in Docker). Agents do not pass private messages — they coordinate by **reading
+and writing the same files** and by **delegating through the orchestrator**.
+
+agent-dimension architecture
+
+### Three modes of agent-to-agent conversation
+
+1. **Task coordination** (`chat.py` / `run.py`) — planner breaks work into steps;
+  worker executes one step at a time (tools + shell); critic reviews before the
+   orchestrator calls it done. Agents hand off through `plan.md` and output files.
+2. **Panel debate** (`chat.py`) — optimist, skeptic, and pragmatist take turns
+  appending to `discussion.md`, explicitly responding to each other's points.
+   The orchestrator reads the thread and reports tensions and a bottom line.
+3. **Direct roundtable** (`discuss.py`) — no orchestrator in the loop. Personas
+  speak turn-by-turn to each other (and about each other by name) in a live
+   transcript streamed to your terminal.
+
+---
+
+
 
 ## Quick start
+
+
 
 ### Local (Python 3.14+)
 
@@ -59,38 +59,44 @@ in a plain Python loop with live streaming.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-
 cp .env.example .env   # add API key(s) for the provider(s) you use
 ```
 
-### Docker (recommended for shell access)
+
+
+### Docker (shell + filesystem sandbox)
 
 ```bash
-cp .env.example .env   # add your API key(s)
-
+cp .env.example .env
 docker compose build
-docker compose run --rm chat          # interactive session
-docker compose run --rm run run.py "your task here"
-docker compose run --rm discuss discuss.py "Should we ship this week?"
+docker compose run --rm chat
 ```
 
-The Docker image auto-enables the Linux sandbox (`AGENT_SANDBOX=1`) and mounts a
-named volume at `/workspace` so agent output persists across runs.
+Docker auto-enables `AGENT_SANDBOX=1`: agents share `/workspace` on disk and can
+run real shell commands (`git`, `python`, `make`, …). A named volume persists files
+across runs.
 
-## Running the agents
+---
 
-### Interactive chat
+
+
+## Running the sandbox
+
+
+
+### Chat with the team (recommended)
 
 ```bash
 python chat.py
-# or: docker compose run --rm chat
 ```
 
-The orchestrator remembers the session. It handles small talk itself, convenes the
-task team for real work, or the panel when you ask for debate:
+You talk to the orchestrator; it talks to the agents. Session memory is kept across turns  follow up, refine, or ask the panel to weigh in:
 
 ```
-you › Should we rewrite the service in Rust? Have the panel debate it.
+you › Break down a migration plan, have the worker draft a checklist, then
+      have the critic review it.
+
+you › Now have the panel debate whether we should do it this quarter.
 ```
 
 Commands: `/files` · `/reset` · `/help` · `/quit`
@@ -98,184 +104,129 @@ Commands: `/files` · `/reset` · `/help` · `/quit`
 ### One-shot task
 
 ```bash
-python run.py "Draft a pitch, have it critiqued, and save the final version to pitch.md"
-python run.py   # built-in demo task
+python run.py "Draft a pitch, have it critiqued, save the final version to pitch.md"
 ```
 
-Streams delegations, tool calls, and workspace files, then exits.
+Runs a single coordinated task, streams delegations and tool calls, prints
+workspace files, then exits.
 
-### Roundtable debate
+### Watch agents debate each other directly
 
 ```bash
-python discuss.py "Monorepo or polyrepo?"
-python discuss.py --rounds 3 --panel optimist,skeptic "Is the deadline realistic?"
+python discuss.py "Should we ship the beta this week?"
+python discuss.py --rounds 3 --panel optimist,skeptic "Monorepo or polyrepo?"
 ```
 
-Each persona reads the transcript and responds by name. No orchestrator, no shared
-filesystem — direct model calls only.
+Each persona reads the full transcript and replies to the others by name — no
+orchestrator, streamed live with colored labels.
+
+---
+
+
 
 ## Configuration
 
-Copy [`.env.example`](.env.example) to `.env` and fill in values for the
-providers you use. The example file documents **every supported variable** —
-defaults, valid values, resolution order, and links to get API keys.
+Copy `[.env.example](.env.example)` to `.env`. It documents every variable,
+defaults, and API key URLs.
 
 ```bash
 cp .env.example .env
 ```
 
+
+
 ### Quick reference
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `LLM_MODEL` | `anthropic:claude-opus-4-8` | Orchestrator model (`provider:model-id`) |
-| `CLAUDE_MODEL` | — | Legacy fallback; bare id → `anthropic:…` |
-| `SUBAGENT_LLM_MODEL` | — | Default model for all subagents |
-| `{ROLE}_LLM_MODEL` | — | Per-agent override (`WORKER_`, `SKEPTIC_`, …) |
-| `ANTHROPIC_API_KEY` | — | Anthropic / Claude |
-| `OPENAI_API_KEY` | — | OpenAI |
-| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | — | Gemini (`google_genai`) |
-| `DEEPSEEK_API_KEY` | — | DeepSeek |
-| `XAI_API_KEY` | — | xAI / Grok |
-| `GROQ_API_KEY` | — | Groq |
-| `MISTRAL_API_KEY` | — | Mistral |
-| `LLM_MAX_TOKENS` | `64000` | Max output tokens per turn |
-| `LLM_TEMPERATURE` | — | Temperature (non-Anthropic providers) |
-| `CLAUDE_EFFORT` / `LLM_EFFORT` | `max` | Anthropic thinking effort |
-| `CLAUDE_THINKING` / `LLM_THINKING` | `true` | Anthropic adaptive thinking |
-| `CLAUDE_TASK_BUDGET_TOKENS` | `128000` | Anthropic agentic loop budget |
-| `AGENT_SANDBOX` | auto in Docker | Enable shell + disk workspace |
-| `AGENT_WORKSPACE` | `/workspace` | Sandbox working directory |
-| `AGENT_EXECUTE_TIMEOUT` | `600` | Shell command timeout (seconds) |
-| `NO_COLOR` | — | Disable colors in `discuss.py` |
 
-**Model resolution order:** `{ROLE}_LLM_MODEL` → `SUBAGENT_LLM_MODEL` →
-`LLM_MODEL` → `CLAUDE_MODEL` → built-in default.
+| Variable                                   | Default                     | Purpose                                       |
+| ------------------------------------------ | --------------------------- | --------------------------------------------- |
+| `LLM_MODEL`                                | `anthropic:claude-opus-4-8` | Orchestrator model (`provider:model-id`)      |
+| `SUBAGENT_LLM_MODEL`                       | —                           | Default model for all subagents               |
+| `{ROLE}_LLM_MODEL`                         | —                           | Per-agent override (`WORKER_`, `SKEPTIC_`, …) |
+| `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / … | —                           | Keys for each provider you use                |
+| `LLM_MAX_TOKENS`                           | `64000`                     | Max output tokens per turn                    |
+| `AGENT_SANDBOX`                            | auto in Docker              | Real shell + disk workspace                   |
+| `AGENT_WORKSPACE`                          | `/workspace`                | Sandbox working directory                     |
 
-**Supported providers:** `openai`, `anthropic`, `google_genai`, `ollama`,
-`deepseek`, `xai`, `groq`, `mistralai` — with aliases `gemini`, `grok`,
-`mistral` in model specs.
 
-Install matching packages from [`requirements.txt`](requirements.txt) for each
-provider you enable.
+**Providers:** `openai`, `anthropic`, `google_genai` (alias `gemini`), `ollama`,
+`deepseek`, `xai` (alias `grok`), `groq`, `mistralai` (alias `mistral`).
 
-### Examples
-
-**Single provider (orchestrator + all agents on Claude):**
-
-```bash
-LLM_MODEL=anthropic:claude-opus-4-8
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-**Mix providers across agents:**
+**Mix models per agent** — e.g. orchestrator on Claude, worker on Groq, skeptic on Grok:
 
 ```bash
 LLM_MODEL=anthropic:claude-opus-4-8
 WORKER_LLM_MODEL=groq:llama-3.3-70b-versatile
 SKEPTIC_LLM_MODEL=xai:grok-3
-ANTHROPIC_API_KEY=sk-ant-...
-GROQ_API_KEY=gsk_...
-XAI_API_KEY=xai-...
 ```
 
-**Docker sandbox** (shell access — see [`.env.example`](.env.example) sandbox section):
+Full reference: `[.env.example](.env.example)`
 
-```bash
-AGENT_SANDBOX=1
-AGENT_WORKSPACE=/workspace
-```
+---
 
-Full comments, API key URLs, and Anthropic-only options are in
-[`.env.example`](.env.example).
+
 
 ## Project layout
 
-| Path | Role |
-|------|------|
-| [`agents/orchestrator.py`](agents/orchestrator.py) | Builds the orchestrator via `create_deep_agent` |
-| [`agents/subagents.py`](agents/subagents.py) | Task team: planner, worker, critic |
-| [`agents/discussants.py`](agents/discussants.py) | Panel personas + shared stances |
-| [`agents/model.py`](agents/model.py) | Multi-provider `build_model()` and env resolution |
-| [`agents/providers.py`](agents/providers.py) | Provider registry (keys, packages, examples) |
-| [`agents/sandbox.py`](agents/sandbox.py) | Docker/local shell backend and workspace helpers |
-| [`agents/tools.py`](agents/tools.py) | Example custom `@tool` stubs for the worker |
-| [`agents/roundtable.py`](agents/roundtable.py) | Direct turn-by-turn debate engine |
-| [`agents/render.py`](agents/render.py) | CLI transcript formatting |
-| [`chat.py`](chat.py) | Interactive chat with session memory |
-| [`run.py`](run.py) | One-shot task runner |
-| [`discuss.py`](discuss.py) | Roundtable debate CLI |
-| [`Dockerfile`](Dockerfile) | Python 3.14 image + Linux CLI tools |
-| [`docker-compose.yml`](docker-compose.yml) | `chat`, `run`, and `discuss` services |
+
+| Path                                               | Role                                                 |
+| -------------------------------------------------- | ---------------------------------------------------- |
+| `[agents/orchestrator.py](agents/orchestrator.py)` | Orchestrator + delegation to the full team           |
+| `[agents/subagents.py](agents/subagents.py)`       | Task team: planner, worker, critic                   |
+| `[agents/discussants.py](agents/discussants.py)`   | Panel personas (optimist, skeptic, pragmatist)       |
+| `[agents/sandbox.py](agents/sandbox.py)`           | Docker/local shell backend (`execute`, `/workspace`) |
+| `[agents/model.py](agents/model.py)`               | Multi-provider model construction                    |
+| `[agents/providers.py](agents/providers.py)`       | Supported LLM providers and API keys                 |
+| `[agents/tools.py](agents/tools.py)`               | Custom `@tool` stubs (attach to subagents)           |
+| `[agents/roundtable.py](agents/roundtable.py)`     | Direct agent-to-agent debate loop                    |
+| `[chat.py](chat.py)`                               | Interactive chat — you + orchestrator + team         |
+| `[run.py](run.py)`                                 | One-shot coordinated task                            |
+| `[discuss.py](discuss.py)`                         | Live roundtable (agents talk to each other only)     |
+
+
+---
+
+
 
 ## For contributors
 
-### Add a subagent
 
-1. Define a `SubAgent` in [`agents/subagents.py`](agents/subagents.py) or
-   [`agents/discussants.py`](agents/discussants.py).
-2. Append it to `TASK_SUBAGENTS`, `DISCUSSANTS`, or `SUBAGENTS`.
-3. Optionally assign a model: `model=build_model_for_role("my_agent")` or a
-   spec string like `"openai:gpt-4.1-mini"`.
 
-The orchestrator discovers new agents automatically through the `task` tool.
+### Add an agent that talks to the team
 
-### Add a custom tool
+1. Define a `SubAgent` in `[agents/subagents.py](agents/subagents.py)` or
+  `[agents/discussants.py](agents/discussants.py)` with a clear `description`
+   (when the orchestrator should delegate) and `system_prompt` (how it interacts
+   with shared files and other agents' output).
+2. Add it to `SUBAGENTS`. The orchestrator picks it up via the `task` tool.
 
-1. Write an `@tool` function in [`agents/tools.py`](agents/tools.py).
-2. Attach it to a subagent's `tools` list in [`agents/subagents.py`](agents/subagents.py).
 
-Every agent already gets deepagents' built-in filesystem and todo tools. In the
-Docker sandbox, the `execute` tool runs shell commands in `/workspace`.
 
-### Add or change a provider
+### Add tools agents use on the workspace
 
-Edit [`agents/providers.py`](agents/providers.py):
+1. Add an `@tool` in `[agents/tools.py](agents/tools.py)`.
+2. Attach it to a subagent's `tools` list (see worker for an example).
 
-- Add a `ProviderInfo` entry (provider id, pip package, env keys, examples).
-- Add the partner package to [`requirements.txt`](requirements.txt).
-- Document the env key in [`.env.example`](.env.example).
+All agents already get filesystem tools (`read_file`, `write_file`, …), todos,
+and — in Docker — `execute` for shell commands against the shared workspace.
 
-Provider specs are normalized in [`agents/model.py`](agents/model.py) (`gemini:`
-→ `google_genai:`, etc.).
+### Extend providers or prompts
 
-### Prompts and behavior
+- Providers: `[agents/providers.py](agents/providers.py)` + `[requirements.txt](requirements.txt)`
+- Prompts: `[agents/orchestrator.py](agents/orchestrator.py)`, `[agents/subagents.py](agents/subagents.py)`
 
-- Orchestrator instructions: [`agents/orchestrator.py`](agents/orchestrator.py)
-- Subagent roles: [`agents/subagents.py`](agents/subagents.py),
-  [`agents/discussants.py`](agents/discussants.py)
-- Sandbox context appended at runtime: [`agents/sandbox.py`](agents/sandbox.py)
+Use `#` comments in Python — not docstrings — for in-code notes.
 
-Keep prompts concise; the orchestrator is the human-facing voice.
+### Security
 
-### Development tips
+Docker sandbox = **real shell inside the container**. Do not mount sensitive host
+paths or pass secrets you cannot afford to expose. Enabling `AGENT_SANDBOX=1`
+locally grants the same shell access on your host.
 
-```bash
-# Validate imports and provider aliases
-python -c "from agents import build_orchestrator; print('ok')"
+---
 
-# Rebuild Docker after dependency changes
-docker compose build --no-cache
 
-# Inspect workspace after a Docker run
-docker compose run --rm run run.py "write hello to /workspace/test.txt"
-docker volume inspect agent-dimension_agent-workspace
-```
-
-Use hash (`#`) comments in Python modules — docstrings are not used for
-documentation in this repo.
-
-### Security note
-
-The Docker sandbox gives agents **real shell access inside the container**. That is
-intentional for coding and automation tasks, but treat the container as an
-untrusted execution environment:
-
-- Do not mount sensitive host directories into `/workspace`.
-- Do not pass production secrets you cannot afford to leak.
-- Enabling `AGENT_SANDBOX=1` locally grants the same shell access on your host.
 
 ## License
 
-No license file is included yet. Add one before distributing or accepting
-external contributions.
+[MIT](LICENSE) © 2026 Made by Aditya Vaish
