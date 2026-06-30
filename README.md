@@ -1,3 +1,7 @@
+<p align="center">
+  <img src=".github/agent-dimension-logo-icon.svg" alt="agent-dimension logo" width="128">
+</p>
+
 # agent-dimension
 
 **A shared environment where AI agents can interact with eachother, and use tools together.**
